@@ -1,0 +1,154 @@
+/* Registered so they can transition; the canvas reads them every frame and follows along */
+@property --bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #05060a;
+}
+@property --ink {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+/* Faint stars: their colour, and the opacity floor the faintest sit at */
+@property --star-faint {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+@property --star-floor {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.3;
+}
+@property --text {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #8a8f9c;
+}
+@property --text-strong {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #c9ccd4;
+}
+@property --text-muted {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #5a5f6c;
+}
+
+:root {
+  color-scheme: light dark;
+  /* light: Solarized Light, leaning on the deeper base2 so the warmth shows */
+  --bg: #eee8d5;
+  --ink: #002b36;
+  --star-faint: #6c71c4; /* Solarized violet: grey specks disappear on paper, colour doesn't */
+  --star-floor: 0.7;
+  --text: #586e75;
+  --text-strong: #073642;
+  --text-muted: #93a1a1;
+  transition:
+    --bg 400ms ease,
+    --ink 400ms ease,
+    --star-faint 400ms ease,
+    --star-floor 400ms ease,
+    --text 400ms ease,
+    --text-strong 400ms ease,
+    --text-muted 400ms ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* dark: the night sky */
+    --bg: #05060a;
+    --ink: #ffffff;
+    --star-faint: #ffffff;
+    --star-floor: 0.3;
+    --text: #8a8f9c;
+    --text-strong: #c9ccd4;
+    --text-muted: #5a5f6c;
+  }
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+}
+
+.title,
+.elsewhere,
+.clock,
+.view,
+.status {
+  position: fixed;
+  margin: 0;
+  font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+}
+
+.title,
+.elsewhere {
+  top: 1.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-strong);
+  cursor: pointer;
+  user-select: none;
+}
+
+.title {
+  left: 1.5rem;
+}
+
+.elsewhere {
+  right: 1.5rem;
+  color: var(--text);
+}
+
+.title:hover,
+.title[aria-pressed='true'],
+.elsewhere:hover {
+  color: var(--ink);
+}
+
+.elsewhere:disabled {
+  color: var(--text-muted);
+  cursor: wait;
+}
+
+.title[aria-pressed='true']::after {
+  content: ' •';
+}
+
+.status {
+  top: 3.5rem;
+  left: 1.5rem;
+}
+
+.clock,
+.view {
+  bottom: 1.25rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.clock {
+  right: 1.5rem;
+}
+
+.view {
+  left: 1.5rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
