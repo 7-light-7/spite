@@ -1,15 +1,19 @@
-from logging import Logger
-from pathlib import Path
-from typing import TypedDict
 import asyncio
-import healpy as hp
-import httpx
 import json
 import logging
 import math
-import numpy as np
 import random
 import time
+from logging import Logger
+from pathlib import Path
+from typing import cast
+
+import httpx
+import numpy as np
+from models.dtos.sky_response import SkyResponse
+from models.dtos.star import Star
+from numpy.typing import NDArray
+from utils import healpy_typed as hp
 
 logger: Logger = logging.getLogger()
 
@@ -20,17 +24,7 @@ MAX_ORDER: int = 4
 
 # A "location" is one of the 48 order-1 tiles; the view points at its centre
 TILE_ORDER: int = 1
-TILE_COUNT: int = hp.nside2npix(2 ** TILE_ORDER)
-
-Star = dict[str, float | int | None]
-
-
-class SkyResponse(TypedDict):
-    pixel: int
-    tiles: int
-    center: dict[str, float]
-    stars: list[Star]
-
+TILE_COUNT: int = hp.nside2npix(1 << TILE_ORDER)
 
 # Fetched tile sets are kept in memory and on disk. Gaia DR3 is a fixed release,
 # so a long TTL is safe; it mostly guards against a bad fetch living forever.
@@ -46,7 +40,7 @@ async def fetch_tile(client: httpx.AsyncClient, order: int, pixel: int) -> list[
     url: str = f"{GAIA_HIPS}/Norder{order}/Dir{(pixel // 10000) * 10000}/Npix{pixel}.tsv"
     async with _upstream:
         response: httpx.Response = await client.get(url)
-    response.raise_for_status()
+    _ = response.raise_for_status()
 
     lines: list[str] = [line for line in response.text.splitlines() if not line.startswith("#")]
     header: list[str] = lines[0].split("\t")
@@ -67,8 +61,7 @@ async def fetch_tile(client: httpx.AsyncClient, order: int, pixel: int) -> list[
 
 def tile_center(pixel: int) -> tuple[float, float]:
     """RA/Dec of an order-1 tile's centre, degrees"""
-    ra, dec = hp.pix2ang(2 ** TILE_ORDER, pixel, nest=True, lonlat=True)
-    return float(ra), float(dec)
+    return hp.pix2ang(1 << TILE_ORDER, pixel)
 
 
 def diamond_tiles(pixel: int) -> list[tuple[int, int]]:
@@ -76,17 +69,17 @@ def diamond_tiles(pixel: int) -> list[tuple[int, int]]:
     return [
         (order, child)
         for order in range(TILE_ORDER, MAX_ORDER + 1)
-        for child in range(pixel * 4 ** (order - TILE_ORDER), (pixel + 1) * 4 ** (order - TILE_ORDER))
+        for child in range(pixel << (2 * (order - TILE_ORDER)), (pixel + 1) << (2 * (order - TILE_ORDER)))
     ]
 
 
 def disc_tiles(center: tuple[float, float], radius: float) -> list[tuple[int, int]]:
     """Every tile overlapping a disc of the given radius around a centre"""
-    vec = hp.ang2vec(*center, lonlat=True)
+    vec: NDArray[np.float64] = hp.ang2vec(*center)
     return [
-        (order, int(pixel))
+        (order, pixel)
         for order in range(TILE_ORDER, MAX_ORDER + 1)
-        for pixel in hp.query_disc(2 ** order, vec, math.radians(radius), inclusive=True, nest=True)
+        for pixel in hp.query_disc(1 << order, vec, math.radians(radius))
     ]
 
 
@@ -94,9 +87,9 @@ def within_disc(stars: list[Star], center: tuple[float, float], radius: float) -
     """Trim the ragged tile edges back to the disc itself"""
     if not stars:
         return stars
-    vec = hp.ang2vec(*center, lonlat=True)
-    vectors = hp.ang2vec([s["ra"] for s in stars], [s["dec"] for s in stars], lonlat=True)
-    inside = np.dot(vectors, vec) >= math.cos(math.radians(radius))
+    vec: NDArray[np.float64] = hp.ang2vec(*center)
+    vectors: NDArray[np.float64] = hp.ang2vec([s["ra"] for s in stars], [s["dec"] for s in stars])
+    inside = cast(list[bool], (vectors @ vec >= math.cos(math.radians(radius))).tolist())
     return [star for star, keep in zip(stars, inside, strict=True) if keep]
 
 
@@ -119,7 +112,7 @@ def load_cached(key: str) -> list[Star] | None:
     if time.time() - fetched_at >= CACHE_TTL:
         return None
     try:
-        stars = json.loads(path.read_text())
+        stars = cast(list[Star], json.loads(path.read_text()))
     except (OSError, ValueError):
         logger.warning("Unreadable cache file %s; refetching", path)
         return None
@@ -134,8 +127,8 @@ def store_cached(key: str, stars: list[Star]) -> None:
     path: Path = cache_path(key)
     # Write beside then rename, so a crash mid-write never leaves a half file
     tmp: Path = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(stars, separators=(",", ":")))
-    tmp.replace(path)
+    _ = tmp.write_text(json.dumps(stars, separators=(",", ":")))
+    _ = tmp.replace(path)
 
 
 async def stars_for(pixel: int, radius: float | None) -> SkyResponse:

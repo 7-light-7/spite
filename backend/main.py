@@ -1,8 +1,9 @@
-from fastapi.applications import FastAPI
-from collections.abc import AsyncGenerator
-from logging import Logger
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from logging import Logger
+
+from fastapi.applications import FastAPI
 from routes.routes import router
 
 logger: Logger = logging.getLogger()
@@ -46,7 +47,9 @@ STARTUP_LOGO = """
 
 # Async context manager to handle the lifespan of the app
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:  # pyright: ignore[reportUnusedParameter]
+    # ignoring the unused param bc we aren't doing anything to app
+    # in life span yet
     print(STARTUP_LOGO)
     logger.info("Startup complete")
     yield
